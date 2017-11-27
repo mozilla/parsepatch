@@ -1,0 +1,4 @@
+coverage
+flake8
+responses
+whatthepatch>=0.0.5

@@ -38,7 +38,8 @@ class Patch(object):
         self.skip_comments = skip_comments
 
     @staticmethod
-    def parse_changeset(base_url, chgset, chunk_size=1000000, file_filter=None, skip_comments=True):
+    def parse_changeset(base_url, chgset, chunk_size=1000000,
+                        file_filter=None, skip_comments=True):
 
         def lines_chunk(it):
             last = None
@@ -279,7 +280,9 @@ class Patch(object):
         added = set(self.added)
         deleted = set(self.deleted)
 
-        use_line = lambda x : not self.skip_comments or x > 0
+        def use_line(x):
+            return not self.skip_comments or x > 0
+
         touched = set(abs(x) for x in added
                       if (use_line(x) and {x, -x} & deleted))
         touched |= set(abs(x) for x in deleted
@@ -300,6 +303,8 @@ class Patch(object):
             elif line.startswith('deleted file'):
                 self.skip_deleted_file()
                 break
+            elif line.startswith('diff --git a/'):
+                return
             else:
                 self.skip_useless()
                 line = self.line()
@@ -330,10 +335,15 @@ class Patch(object):
 if __name__ == '__main__':
     description = 'Get changed line in a patch'
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('-r', '--revision', dest='rev', help='revision')
-    parser.add_argument('-u', '--base-url', dest='url', help='base url to retrieve the patch')
+    url = 'https://hg.mozilla.org/mozilla-central/raw-rev'
+    parser.add_argument('-r', '--revision', dest='rev',
+                        help='revision')
+    parser.add_argument('-u', '--base-url', dest='url',
+                        default=url,
+                        help='base url to retrieve the patch')
     parser.add_argument('-s', '--chunk-size', dest='chunk_size',
-                        default=1000000, type=int, help='chunk size')
+                        default=1000000, type=int,
+                        help='chunk size')
     args = parser.parse_args()
     res = Patch.parse_changeset(args.url,
                                 args.rev,
