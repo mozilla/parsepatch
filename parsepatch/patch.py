@@ -2,12 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import argparse
 from libmozdata.hgmozilla import RawRevision
+from pprint import pprint
 import re
 import requests
 import six
-from .logger import logger
-from . import utils
 
 
 NUMS_PAT = re.compile(r'^@@ -([0-9]+),?([0-9]+)? \+([0-9]+),?([0-9]+)? @@')
@@ -23,7 +23,7 @@ class Patch(object):
        By the way, the 'empty' lines (whites or comments) are removed.
     """
 
-    def __init__(self, lines_gen):
+    def __init__(self, lines_gen, file_filter=None):
         self.index = 0
         self.lines = []
         self.N = 0
@@ -34,9 +34,11 @@ class Patch(object):
         self.results = {}
         self.filename = ''
         self.changeset = ''
+        self.file_filter = file_filter
 
     @staticmethod
-    def parse_changeset(chgset, channel='nightly', chunk_size=1000000):
+    def parse_changeset(chgset, channel='nightly',
+                        chunk_size=1000000, file_filter=None):
 
         def lines_chunk(it):
             last = None
@@ -47,32 +49,36 @@ class Patch(object):
                 last = chunk.pop()
                 yield chunk
 
-        logger.info('Get patch for revision {}'.format(chgset))
         url = '{}/{}'.format(RawRevision.get_url(channel),
                              chgset)
         r = requests.get(url, stream=True)
         it = r.iter_content(chunk_size=chunk_size,
                             decode_unicode=True)
-        p = Patch(lines_chunk(it))
+        p = Patch(lines_chunk(it), file_filter=file_filter)
         p.changeset = chgset
         return p.parse()
 
     @staticmethod
-    def parse_patch(patch):
+    def parse_patch(patch, file_filter=None):
         if isinstance(six.strings, patch):
             patch = patch.split('\n')
 
         def gen(x):
             yield x
 
-        p = Patch(gen(patch))
+        p = Patch(gen(patch), file_filter=file_filter)
         return p.parse()
 
     @staticmethod
-    def parse_file(filename):
+    def parse_file(filename, file_filter=None):
         with open(filename, 'r') as In:
             patch = In.read()
-            return Patch.parse_patch(patch)
+            return Patch.parse_patch(patch, file_filter=file_filter)
+
+    def filter_file(self, f):
+        if self.file_filter is not None:
+            return self.file_filter(f)
+        return True
 
     def neighbourhood(self, index):
         print('----------------------------------')
@@ -143,8 +149,7 @@ class Patch(object):
         if not line:
             line = self.line()
         m = NUMS_PAT.search(line)
-        n = list(map(lambda x: int(x) if x else 1,
-                     m.groups()))
+        n = [int(x) if x else 1 for x in m.groups()]
         return n[:2], n[2:]
 
     def skip_binary(self):
@@ -190,7 +195,7 @@ class Patch(object):
         new_p = new_p[2:] if new_p.startswith('b/') else new_p
         self.added = []
         self.deleted = []
-        if utils.is_interesting_file(new_p):
+        if self.filter_file(new_p):
             self.filename = new_p
             return True
         else:
@@ -218,7 +223,7 @@ class Patch(object):
             scount = self.get_signed_count(line, count)
             self.deleted.append(scount)
             count += 1
-            
+
     def parse_hunk(self, line):
 
         def check(x):
@@ -255,8 +260,9 @@ class Patch(object):
 
     @staticmethod
     def get_touched(added, deleted):
-        # negative line numbers are for empty lines (i.e. whites, comments, ...)
-        # off course we keep positive lines
+        # negative line numbers are for empty
+        # lines (i.e. whites, comments, ...)
+        # Off course we keep positive lines
         # but we keep common lines which aren't both negative
         # if added=[1,2,3,4,-5,-6,-7,8,10] and deleted=[4,5,6,-7,9,-10]
         # then res_a=[1,2,3,8], res_d=[9], res_t=[4,5,6,10]
@@ -274,7 +280,7 @@ class Patch(object):
         deleted = list(sorted(deleted))
 
         return added, deleted, touched
-            
+
     def get_changes(self):
         for line in self.get_lines:
             if line.startswith('new file'):
@@ -308,8 +314,19 @@ class Patch(object):
                     self.move()
         except StopIteration:
             pass
-        except Exception:
-            e = 'Error in parsing patch with revision {}'
-            logger.error(e.format(self.chgset))
-            return {}
         return self.results
+
+
+if __name__ == '__main__':
+    description = 'Get changed line in a patch'
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('-r', '--revision', dest='rev', help='revision')
+    parser.add_argument('-c', '--channel', dest='channel',
+                        default='nightly', help='channel')
+    parser.add_argument('-s', '--chunk-size', dest='chunk_size',
+                        default=1000000, type=int, help='chunk size')
+    args = parser.parse_args()
+    res = Patch.parse_changeset(args.rev,
+                                channel=args.channel,
+                                chunk_size=args.chunk_size)
+    pprint(res)
