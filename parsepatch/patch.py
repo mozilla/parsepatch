@@ -63,7 +63,7 @@ class Patch(object):
 
     @staticmethod
     def parse_patch(patch, file_filter=None, skip_comments=True):
-        if isinstance(six.strings, patch):
+        if isinstance(patch, six.string_types):
             patch = patch.split('\n')
 
         def gen(x):
