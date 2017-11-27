@@ -220,7 +220,9 @@ class Patch(object):
                 break
 
     def get_signed_count(self, line, count):
-        return EMPTY_PAT.match(line) and -count or count
+        if self.skip_comments and EMPTY_PAT.match(line):
+            return -count
+        return count
 
     def count_minus(self, count):
         self._condition(lambda x: x.startswith('-'))
