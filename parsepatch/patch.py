@@ -3,7 +3,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-from libmozdata.hgmozilla import RawRevision
 from pprint import pprint
 import re
 import requests
@@ -37,8 +36,7 @@ class Patch(object):
         self.file_filter = file_filter
 
     @staticmethod
-    def parse_changeset(chgset, channel='nightly',
-                        chunk_size=1000000, file_filter=None):
+    def parse_changeset(base_url, chgset, chunk_size=1000000, file_filter=None):
 
         def lines_chunk(it):
             last = None
@@ -49,8 +47,7 @@ class Patch(object):
                 last = chunk.pop()
                 yield chunk
 
-        url = '{}/{}'.format(RawRevision.get_url(channel),
-                             chgset)
+        url = '{}/{}'.format(base_url, chgset)
         r = requests.get(url, stream=True)
         it = r.iter_content(chunk_size=chunk_size,
                             decode_unicode=True)
@@ -321,12 +318,11 @@ if __name__ == '__main__':
     description = 'Get changed line in a patch'
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('-r', '--revision', dest='rev', help='revision')
-    parser.add_argument('-c', '--channel', dest='channel',
-                        default='nightly', help='channel')
+    parser.add_argument('-u', '--base-url', dest='url', help='base url to retrieve the patch')
     parser.add_argument('-s', '--chunk-size', dest='chunk_size',
                         default=1000000, type=int, help='chunk size')
     args = parser.parse_args()
-    res = Patch.parse_changeset(args.rev,
-                                channel=args.channel,
+    res = Patch.parse_changeset(args.url,
+                                args.rev,
                                 chunk_size=args.chunk_size)
     pprint(res)

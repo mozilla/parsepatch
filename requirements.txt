@@ -1,2 +1,1 @@
-libmozdata>=0.1.39
 requests>=2.18.4
