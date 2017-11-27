@@ -22,7 +22,8 @@ class Patch(object):
        By the way, the 'empty' lines (whites or comments) are removed.
     """
 
-    def __init__(self, lines_gen, file_filter=None):
+    def __init__(self, lines_gen, file_filter=None, skip_comments=True):
+        assert isinstance(skip_comments, bool)
         self.index = 0
         self.lines = []
         self.N = 0
@@ -34,9 +35,10 @@ class Patch(object):
         self.filename = ''
         self.changeset = ''
         self.file_filter = file_filter
+        self.skip_comments = skip_comments
 
     @staticmethod
-    def parse_changeset(base_url, chgset, chunk_size=1000000, file_filter=None):
+    def parse_changeset(base_url, chgset, chunk_size=1000000, file_filter=None, skip_comments=True):
 
         def lines_chunk(it):
             last = None
@@ -51,19 +53,27 @@ class Patch(object):
         r = requests.get(url, stream=True)
         it = r.iter_content(chunk_size=chunk_size,
                             decode_unicode=True)
-        p = Patch(lines_chunk(it), file_filter=file_filter)
+        p = Patch(
+            lines_chunk(it),
+            file_filter=file_filter,
+            skip_comments=skip_comments,
+        )
         p.changeset = chgset
         return p.parse()
 
     @staticmethod
-    def parse_patch(patch, file_filter=None):
+    def parse_patch(patch, file_filter=None, skip_comments=True):
         if isinstance(six.strings, patch):
             patch = patch.split('\n')
 
         def gen(x):
             yield x
 
-        p = Patch(gen(patch), file_filter=file_filter)
+        p = Patch(
+            gen(patch),
+            file_filter=file_filter,
+            skip_comments=skip_comments,
+        )
         return p.parse()
 
     @staticmethod
@@ -210,7 +220,9 @@ class Patch(object):
                 break
 
     def get_signed_count(self, line, count):
-        return -count if EMPTY_PAT.match(line) else count
+        if self.skip_comments and EMPTY_PAT.match(line):
+            return -count
+        return count
 
     def count_minus(self, count):
         self._condition(lambda x: x.startswith('-'))
