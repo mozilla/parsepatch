@@ -22,7 +22,8 @@ class Patch(object):
        By the way, the 'empty' lines (whites or comments) are removed.
     """
 
-    def __init__(self, lines_gen, file_filter=None):
+    def __init__(self, lines_gen, file_filter=None, skip_comments=True):
+        assert isinstance(skip_comments, bool)
         self.index = 0
         self.lines = []
         self.N = 0
@@ -34,9 +35,10 @@ class Patch(object):
         self.filename = ''
         self.changeset = ''
         self.file_filter = file_filter
+        self.skip_comments = skip_comments
 
     @staticmethod
-    def parse_changeset(base_url, chgset, chunk_size=1000000, file_filter=None):
+    def parse_changeset(base_url, chgset, chunk_size=1000000, file_filter=None, skip_comments=True):
 
         def lines_chunk(it):
             last = None
@@ -51,19 +53,27 @@ class Patch(object):
         r = requests.get(url, stream=True)
         it = r.iter_content(chunk_size=chunk_size,
                             decode_unicode=True)
-        p = Patch(lines_chunk(it), file_filter=file_filter)
+        p = Patch(
+            lines_chunk(it),
+            file_filter=file_filter,
+            skip_comments=skip_comments,
+        )
         p.changeset = chgset
         return p.parse()
 
     @staticmethod
-    def parse_patch(patch, file_filter=None):
-        if isinstance(six.strings, patch):
+    def parse_patch(patch, file_filter=None, skip_comments=True):
+        if isinstance(patch, six.string_types):
             patch = patch.split('\n')
 
         def gen(x):
             yield x
 
-        p = Patch(gen(patch), file_filter=file_filter)
+        p = Patch(
+            gen(patch),
+            file_filter=file_filter,
+            skip_comments=skip_comments,
+        )
         return p.parse()
 
     @staticmethod
@@ -210,7 +220,9 @@ class Patch(object):
                 break
 
     def get_signed_count(self, line, count):
-        return -count if EMPTY_PAT.match(line) else count
+        if self.skip_comments and EMPTY_PAT.match(line):
+            return -count
+        return count
 
     def count_minus(self, count):
         self._condition(lambda x: x.startswith('-'))
@@ -255,23 +267,25 @@ class Patch(object):
                 break
             self.parse_hunk(line)
 
-    @staticmethod
-    def get_touched(added, deleted):
-        # negative line numbers are for empty
-        # lines (i.e. whites, comments, ...)
-        # Off course we keep positive lines
-        # but we keep common lines which aren't both negative
-        # if added=[1,2,3,4,-5,-6,-7,8,10] and deleted=[4,5,6,-7,9,-10]
-        # then res_a=[1,2,3,8], res_d=[9], res_t=[4,5,6,10]
-        added = set(added)
-        deleted = set(deleted)
+    def get_touched(self):
+        '''
+        Negative line numbers are for empty
+        lines (i.e. whites, comments, ...)
+        Of course we keep positive lines
+        but we keep common lines which aren't both negative
+        if added=[1,2,3,4,-5,-6,-7,8,10] and deleted=[4,5,6,-7,9,-10]
+        then res_a=[1,2,3,8], res_d=[9], res_t=[4,5,6,10]
+        '''
+        added = set(self.added)
+        deleted = set(self.deleted)
 
+        use_line = lambda x : not self.skip_comments or x > 0
         touched = set(abs(x) for x in added
-                      if (x > 0 and {x, -x} & deleted))
+                      if (use_line(x) and {x, -x} & deleted))
         touched |= set(abs(x) for x in deleted
-                       if (x > 0 and {x, -x} & added))
-        added = [x for x in added if x > 0 and x not in touched]
-        deleted = [x for x in deleted if x > 0 and x not in touched]
+                       if (use_line(x) and {x, -x} & added))
+        added = [x for x in added if use_line(x) and x not in touched]
+        deleted = [x for x in deleted if use_line(x) and x not in touched]
         touched = list(sorted(touched))
         added = list(sorted(added))
         deleted = list(sorted(deleted))
@@ -294,8 +308,7 @@ class Patch(object):
                 break
 
         if self.added or self.deleted:
-            added, deleted, touched = Patch.get_touched(self.added,
-                                                        self.deleted)
+            added, deleted, touched = self.get_touched()
             self.results[self.filename] = {'added': added,
                                            'deleted': deleted,
                                            'touched': touched,
