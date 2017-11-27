@@ -1,7 +1,6 @@
 # parsepatch
 > Library to parse patches in an efficient manner
 
-
 [![Build Status](https://api.travis-ci.org/mozilla/libmozdata.svg?branch=master)](https://travis-ci.org/mozilla/parsepatch)
 [![codecov.io](https://img.shields.io/codecov/c/github/mozilla/libmozdata/master.svg)](https://codecov.io/github/mozilla/parsepatch?branch=master)
 
