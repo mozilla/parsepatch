@@ -32,16 +32,14 @@ class PatchTest(unittest.TestCase):
             if 'added' in i:
                 added = list(sorted(set(i['added']) | set(i['touched'])))
                 self.assertEqual(added, r2[p])
-            elif 'new' in i:
-                # we've a new file
-                self.assertTrue(p in r2)
 
     def test(self):
         revs = ['c4c0ad8b3eaa', 'f045ac9f76cf',
                 'c58e9e70f971', 'd7a700707ddb',
                 '81d3e4a2f3f3', '7e60ad275b73',
                 'f9b391e62608', '7dabae5e261a',
-                'c6f9187b0b2e', 'd4f80c4ba719']
+                'c6f9187b0b2e', 'd4f80c4ba719',
+                'b184c87f7606']
         for rev in revs:
             path = 'tests/patches/{}.patch'.format(rev)
             patch = self.readfile(path)
