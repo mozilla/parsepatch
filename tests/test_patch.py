@@ -20,9 +20,10 @@ class PatchTest(unittest.TestCase):
             h = diff.header
             new_p = h.new_path[2:] if h.new_path.startswith('b/') else h.new_p
             res[new_p] = added = []
-            for old_line, new_line, _ in diff.changes:
-                if not old_line and new_line:
-                    added.append(new_line)
+            if diff.changes:
+                for old_line, new_line, _ in diff.changes:
+                    if not old_line and new_line:
+                        added.append(new_line)
 
         return res
 
