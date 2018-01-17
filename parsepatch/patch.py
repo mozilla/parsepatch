@@ -78,10 +78,12 @@ class Patch(object):
         return p.parse()
 
     @staticmethod
-    def parse_file(filename, file_filter=None):
+    def parse_file(filename, file_filter=None, skip_comments=True):
         with open(filename, 'r') as In:
             patch = In.read()
-            return Patch.parse_patch(patch, file_filter=file_filter)
+            return Patch.parse_patch(patch,
+                                     file_filter=file_filter,
+                                     skip_comments=skip_comments)
 
     def filter_file(self, f):
         if self.file_filter is not None:
