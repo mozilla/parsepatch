@@ -190,7 +190,7 @@ class Patch(object):
             self.results[self.filename] = {'new': True}
 
     def next_diff(self):
-        self._condition(lambda x: not x.startswith('diff --git a/'))
+        self._condition(lambda x: not x.startswith('diff --git a/') and not x.startswith('diff -r '))
         for line in self.get_lines:
             if line is None:
                 return True
@@ -305,7 +305,7 @@ class Patch(object):
             elif line.startswith('deleted file'):
                 self.skip_deleted_file()
                 break
-            elif line.startswith('diff --git a/'):
+            elif line.startswith('diff --git a/') or line.startswith('diff -r '):
                 return
             else:
                 self.skip_useless()

@@ -27,7 +27,7 @@ class PatchTest(unittest.TestCase):
 
         return res
 
-    def compare(self, rev, r1, r2):
+    def compare(self, r1, r2):
         for p, i in r1.items():
             if 'added' in i:
                 added = list(sorted(set(i['added']) | set(i['touched'])))
@@ -45,4 +45,11 @@ class PatchTest(unittest.TestCase):
             patch = self.readfile(path)
             r1 = Patch.parse_patch(patch, skip_comments=False)
             r2 = self.get_touched(patch)
-            self.compare(rev, r1, r2)
+            self.compare(r1, r2)
+
+    def test_diff_r(self):
+        path = 'tests/patches/janx.patch'
+        patch = self.readfile(path)
+        r1 = Patch.parse_patch(patch, skip_comments=False)
+        r2 = self.get_touched(patch)
+        self.compare(r1, r2)
