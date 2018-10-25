@@ -24,7 +24,7 @@ class Patch(object):
     """
 
     def __init__(self, lines_gen, file_filter=None,
-                 skip_comments=True, add_lines_for_new=True):
+                 skip_comments=True, get_hunks=False, add_lines_for_new=True):
         assert isinstance(skip_comments, bool)
         self.index = 0
         self.lines = []
@@ -34,16 +34,18 @@ class Patch(object):
         self.added = None
         self.deleted = None
         self.results = {}
+        self.hunks = []
         self.filename = ''
         self.changeset = ''
         self.file_filter = file_filter
         self.skip_comments = skip_comments
+        self.get_hunks = get_hunks
         self.add_lines_for_new = add_lines_for_new
 
     @staticmethod
-    def parse_changeset(base_url, chgset, chunk_size=1000000,
-                        file_filter=None, skip_comments=True,
-                        add_lines_for_new=True):
+    def parse_changeset(base_url, chgset, get_hunks=False,
+                        chunk_size=1000000, file_filter=None,
+                        skip_comments=True, add_lines_for_new=True):
 
         def lines_chunk(it):
             last = None
@@ -62,14 +64,15 @@ class Patch(object):
             lines_chunk(it),
             file_filter=file_filter,
             skip_comments=skip_comments,
+            get_hunks=get_hunks,
             add_lines_for_new=add_lines_for_new,
         )
         p.changeset = chgset
         return p.parse()
 
     @staticmethod
-    def parse_patch(patch, file_filter=None, skip_comments=True,
-                    add_lines_for_new=True):
+    def parse_patch(patch, get_hunks=False, file_filter=None,
+                    skip_comments=True, add_lines_for_new=True):
         if isinstance(patch, six.string_types):
             patch = patch.split('\n')
 
@@ -80,16 +83,18 @@ class Patch(object):
             gen(patch),
             file_filter=file_filter,
             skip_comments=skip_comments,
+            get_hunks=get_hunks,
             add_lines_for_new=add_lines_for_new,
         )
         return p.parse()
 
     @staticmethod
-    def parse_file(filename, file_filter=None, skip_comments=True,
-                   add_lines_for_new=True):
+    def parse_file(filename, get_hunks=False, file_filter=None,
+                   skip_comments=True, add_lines_for_new=True):
         with open(filename, 'r') as In:
             patch = In.read()
             return Patch.parse_patch(patch,
+                                     get_hunks=get_hunks,
                                      file_filter=file_filter,
                                      skip_comments=skip_comments,
                                      add_lines_for_new=add_lines_for_new)
@@ -290,6 +295,36 @@ class Patch(object):
                 break
             self.parse_hunk(line)
 
+    def parse_files_hunks(self, line):
+        (src_start, src_end), (dest_start, dest_end) = self.parse_numbers(line)
+        diff = []
+
+        for h_line in self.get_lines:
+            self.skip_newlines()
+
+            if h_line.startswith('diff --git a/') or h_line.startswith('diff -r '):
+                self.index -= 1  # step back, we have moved into the next file
+                break
+            elif h_line.startswith('@') and h_line != line:
+                self.parse_files_hunks(line)  # recursively parse each hunk
+            else:
+                if h_line != line:
+                    diff.append(h_line)
+
+        # add the current hunk to the final list of hunks
+        # this can be changed to be any format you would like;
+        # instead of dictionaries you could create hunk objects
+        self.hunks.append(
+            {
+                'filename': self.filename,
+                'src_start': src_start,
+                'src_end': src_end,
+                'dest_start': dest_start,
+                'dest_end': dest_end,
+                'diff': '\n'.join(diff) + '\n'
+            }
+        )
+
     def get_touched(self):
         '''
         Negative line numbers are for empty
@@ -319,10 +354,10 @@ class Patch(object):
 
     def get_changes(self):
         for line in self.get_lines:
-            if line.startswith('new file'):
+            if line.startswith('new file') and not self.get_hunks:
                 self.skip_new_file()
                 break
-            elif line.startswith('deleted file'):
+            elif line.startswith('deleted file') and not self.get_hunks:
                 self.skip_deleted_file()
                 break
             elif line.startswith('diff --git a/') or line.startswith('diff -r '):
@@ -331,15 +366,18 @@ class Patch(object):
                 self.skip_useless()
                 line = self.line()
                 if line.startswith('@'):
-                    self.parse_hunks(line)
+                    if self.get_hunks:
+                        self.parse_files_hunks(line)
+                    else:
+                        self.parse_hunks(line)
                 break
 
-        if self.added or self.deleted:
-            added, deleted, touched = self.get_touched()
-            self.results[self.filename] = {'added': added,
-                                           'deleted': deleted,
-                                           'touched': touched,
-                                           'new': False}
+        if not self.get_hunks and (self.added or self.deleted):
+                added, deleted, touched = self.get_touched()
+                self.results[self.filename] = {'added': added,
+                                               'deleted': deleted,
+                                               'touched': touched,
+                                               'new': False}
 
     def parse(self):
         try:
@@ -351,6 +389,9 @@ class Patch(object):
                     self.move()
         except StopIteration:
             pass
+
+        if self.get_hunks:
+            return self.hunks
         return self.results
 
 
@@ -370,13 +411,16 @@ if __name__ == '__main__':
                         help='diff file')
     parser.add_argument('-n', '--lines-for-new', dest='lines_for_new', action='store_true',
                         help='add line number for new files')
+    parser.add_argument('-g', '--get-hunks', action='store_true',
+                        help='collect hunks instead of diff stats')
     args = parser.parse_args()
 
     if args.file:
-        res = Patch.parse_file(args.file, add_lines_for_new=args.lines_for_new)
+        res = Patch.parse_file(args.file, args.get_hunks, add_lines_for_new=args.lines_for_new)
     else:
         res = Patch.parse_changeset(args.url,
                                     args.rev,
+                                    args.get_hunks,
                                     chunk_size=args.chunk_size,
                                     add_lines_for_new=args.lines_for_new)
 
