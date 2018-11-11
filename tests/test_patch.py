@@ -53,3 +53,22 @@ class PatchTest(unittest.TestCase):
         r1 = Patch.parse_patch(patch, skip_comments=False)
         r2 = self.get_touched(patch)
         self.compare(r1, r2)
+
+    def test_new(self):
+
+        def filt(f):
+            return f.endswith('jsm') or f.endswith('js') or f.endswith('ini')
+
+        path = 'tests/patches/b184c87f7606.patch'
+        patch = self.readfile(path)
+        r1 = Patch.parse_patch(patch, skip_comments=False, file_filter=filt)
+        for name, info in r1.items():
+            if info['new']:
+                self.assertEqual(name, 'browser/tools/mozscreenshots/browser_screenshots_cropping.js')
+        r2 = Patch.parse_patch(patch, skip_comments=False,
+                               add_lines_for_new=True,
+                               file_filter=filt)
+        for name, info in r2.items():
+            if info['new']:
+                self.assertEqual(name, 'browser/tools/mozscreenshots/browser_screenshots_cropping.js')
+                self.assertEqual(info['added'], list(range(1, 83)))

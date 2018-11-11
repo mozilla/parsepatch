@@ -22,7 +22,8 @@ class Patch(object):
        By the way, the 'empty' lines (whites or comments) are removed.
     """
 
-    def __init__(self, lines_gen, file_filter=None, skip_comments=True):
+    def __init__(self, lines_gen, file_filter=None,
+                 skip_comments=True, add_lines_for_new=True):
         assert isinstance(skip_comments, bool)
         self.index = 0
         self.lines = []
@@ -36,10 +37,12 @@ class Patch(object):
         self.changeset = ''
         self.file_filter = file_filter
         self.skip_comments = skip_comments
+        self.add_lines_for_new = add_lines_for_new
 
     @staticmethod
     def parse_changeset(base_url, chgset, chunk_size=1000000,
-                        file_filter=None, skip_comments=True):
+                        file_filter=None, skip_comments=True,
+                        add_lines_for_new=True):
 
         def lines_chunk(it):
             last = None
@@ -58,12 +61,14 @@ class Patch(object):
             lines_chunk(it),
             file_filter=file_filter,
             skip_comments=skip_comments,
+            add_lines_for_new=add_lines_for_new,
         )
         p.changeset = chgset
         return p.parse()
 
     @staticmethod
-    def parse_patch(patch, file_filter=None, skip_comments=True):
+    def parse_patch(patch, file_filter=None, skip_comments=True,
+                    add_lines_for_new=True):
         if isinstance(patch, six.string_types):
             patch = patch.split('\n')
 
@@ -74,16 +79,19 @@ class Patch(object):
             gen(patch),
             file_filter=file_filter,
             skip_comments=skip_comments,
+            add_lines_for_new=add_lines_for_new,
         )
         return p.parse()
 
     @staticmethod
-    def parse_file(filename, file_filter=None, skip_comments=True):
+    def parse_file(filename, file_filter=None, skip_comments=True,
+                   add_lines_for_new=True):
         with open(filename, 'r') as In:
             patch = In.read()
             return Patch.parse_patch(patch,
                                      file_filter=file_filter,
-                                     skip_comments=skip_comments)
+                                     skip_comments=skip_comments,
+                                     add_lines_for_new=add_lines_for_new)
 
     def filter_file(self, f):
         if self.file_filter is not None:
@@ -180,6 +188,7 @@ class Patch(object):
             self.move(minus[1])
 
     def skip_new_file(self):
+        plus = None
         self.skip_useless()
         if self.is_binary():
             self.skip_binary()
@@ -188,6 +197,9 @@ class Patch(object):
             self.move(plus[1])
         if self.filename:
             self.results[self.filename] = {'new': True}
+            if plus and self.add_lines_for_new:
+                self.added = list(range(1, plus[1] + 1))
+                self.deleted = []
 
     def next_diff(self):
         self._condition(lambda x: not x.startswith('diff --git a/') and not x.startswith('diff -r '))
@@ -213,11 +225,15 @@ class Patch(object):
         return False
 
     def skip_useless(self):
-        self._condition(lambda x: x.startswith('---') or
-                        x.startswith('+++') or
-                        x.startswith('index ') or
-                        x.startswith('old mode') or
-                        x.startswith('new mode'))
+
+        def start_filt(x):
+            return x.startswith('---') or \
+                x.startswith('+++') or \
+                x.startswith('index ') or \
+                x.startswith('old mode') or \
+                x.startswith('new mode')
+
+        self._condition(start_filt)
         for line in self.get_lines:
             if line is None:
                 break
@@ -348,12 +364,16 @@ if __name__ == '__main__':
                         help='chunk size')
     parser.add_argument('-f', '--file', dest='file', default='',
                         help='diff file')
+    parser.add_argument('-n', '--lines-for-new', dest='lines_for_new', action='store_true',
+                        help='add line number for new files')
     args = parser.parse_args()
 
     if args.file:
-        res = Patch.parse_file(args.file)
+        res = Patch.parse_file(args.file, add_lines_for_new=args.lines_for_new)
     else:
         res = Patch.parse_changeset(args.url,
                                     args.rev,
-                                    chunk_size=args.chunk_size)
+                                    chunk_size=args.chunk_size,
+                                    add_lines_for_new=args.lines_for_new)
+
     pprint(res)
