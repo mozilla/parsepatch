@@ -346,8 +346,14 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--chunk-size', dest='chunk_size',
                         default=1000000, type=int,
                         help='chunk size')
+    parser.add_argument('-f', '--file', dest='file', default='',
+                        help='diff file')
     args = parser.parse_args()
-    res = Patch.parse_changeset(args.url,
-                                args.rev,
-                                chunk_size=args.chunk_size)
+
+    if args.file:
+        res = Patch.parse_file(args.file)
+    else:
+        res = Patch.parse_changeset(args.url,
+                                    args.rev,
+                                    chunk_size=args.chunk_size)
     pprint(res)
