@@ -176,6 +176,12 @@ class Patch(object):
             if line is None:
                 break
 
+    def skip_newlines(self):
+        self._condition(lambda x: re.search('^[\n]*$', x) or re.search('^[\r]*$', x))
+        for line in self.get_lines:
+            if line is None:
+                break
+
     def is_binary(self):
         return self.line() == 'GIT binary patch'
 
