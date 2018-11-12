@@ -1,0 +1,69 @@
+
+# HG changeset patch
+# User Dão Gottwald <dao@mozilla.com>
+# Date 1540374103 -7200
+# Node ID 8be2131ed18337d6d5011d51aa9d9f39aefff495
+# Parent  460f9791ba8a7c40171fe8762bb827c59c83e9e3
+Bug 1501270 - Set the UrlbarInput value to the target URL when selecting a result. r=standard8
+
+diff --git a/browser/components/urlbar/UrlbarInput.jsm b/browser/components/urlbar/UrlbarInput.jsm
+--- a/browser/components/urlbar/UrlbarInput.jsm
++++ b/browser/components/urlbar/UrlbarInput.jsm
+@@ -225,17 +225,27 @@ class UrlbarInput {
+ 
+   /**
+    * Called by the view when a result is selected.
+    *
+    * @param {Event} event The event that selected the result.
+    * @param {UrlbarMatch} result The result that was selected.
+    */
+   resultSelected(event, result) {
+-    // TODO: Set the input value to the target url.
++    // Set the input value to the target url.
++    let val = result.url;
++    let uri;
++    try {
++      uri = Services.io.newURI(val);
++    } catch (ex) {}
++    if (uri) {
++      val = this.window.losslessDecodeURI(uri);
++    }
++    this.value = val;
++
+     this.controller.resultSelected(event, result);
+   }
+ 
+   // Getters and Setters below.
+ 
+   get focused() {
+     return this.textbox.getAttribute("focused") == "true";
+   }
+diff --git a/browser/components/urlbar/tests/browser/browser_UrlbarController_resultOpening.js b/browser/components/urlbar/tests/browser/browser_UrlbarController_resultOpening.js
+--- a/browser/components/urlbar/tests/browser/browser_UrlbarController_resultOpening.js
++++ b/browser/components/urlbar/tests/browser/browser_UrlbarController_resultOpening.js
+@@ -54,17 +54,23 @@ add_task(function test_resultSelected_sw
+   sandbox.stub(window, "switchToTabHavingURI").returns(true);
+   sandbox.stub(window, "isTabEmpty").returns(false);
+   sandbox.stub(window.gBrowser, "removeTab");
+ 
+   const event = new MouseEvent("click", {button: 0});
+   const url = "https://example.com/1";
+   const result = new UrlbarMatch(UrlbarUtils.MATCH_TYPE.TAB_SWITCH, {url});
+ 
+-  controller.resultSelected(event, result);
++  Assert.equal(gURLBar.value, "", "urlbar input is empty before selecting a result");
++  if (Services.prefs.getBoolPref("browser.urlbar.quantumbar", true)) {
++    gURLBar.resultSelected(event, result);
++    Assert.equal(gURLBar.value, url, "urlbar value updated for selected result");
++  } else {
++    controller.resultSelected(event, result);
++  }
+ 
+   Assert.ok(window.switchToTabHavingURI.calledOnce,
+     "Should have triggered switching to the tab");
+ 
+   let args = window.switchToTabHavingURI.args[0];
+ 
+   Assert.equal(args[0], url, "Should have passed the expected url");
+   Assert.ok(!args[1], "Should not attempt to open a new tab");
+
