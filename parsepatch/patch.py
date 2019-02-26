@@ -300,8 +300,6 @@ class Patch(object):
         diff = []
 
         for h_line in self.get_lines:
-            self.skip_newlines()
-
             if h_line.startswith('diff --git a/') or h_line.startswith('diff -r '):
                 self.index -= 1  # step back, we have moved into the next file
                 break
