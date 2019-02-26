@@ -9,10 +9,10 @@ import requests
 import six
 
 
-NUMS_PAT = re.compile(r'^@@ -([0-9]+),?([0-9]+)? \+([0-9]+),?([0-9]+)? @@')
-FIRST = {' ', '+', '-'}
-EMPTY_PAT = re.compile(r'^[+-][ \t]*(?://.*)?(?:/\*[^\*]*[\*]+/)?[ \t]*$')
-NOTHING_PAT = re.compile(r'^[\r\n]*$')
+NUMS_PAT = re.compile(rb'^@@ -([0-9]+),?([0-9]+)? \+([0-9]+),?([0-9]+)? @@')
+FIRST = {ord(' '), ord('+'), ord('-')}
+EMPTY_PAT = re.compile(rb'^[+-][ \t]*(?://.*)?(?:/\*[^\*]*[\*]+/)?[ \t]*$')
+NOTHING_PAT = re.compile(rb'^[\r\n]*$')
 
 
 class Patch(object):
@@ -50,7 +50,7 @@ class Patch(object):
         def lines_chunk(it):
             last = None
             for chunk in it:
-                chunk = chunk.split('\n')
+                chunk = chunk.split(b'\n')
                 if last is not None:
                     chunk[0] = last + chunk[0]
                 last = chunk.pop()
@@ -59,7 +59,7 @@ class Patch(object):
         url = '{}/{}'.format(base_url, chgset)
         r = requests.get(url, stream=True)
         it = r.iter_content(chunk_size=chunk_size,
-                            decode_unicode=True)
+                            decode_unicode=False)
         p = Patch(
             lines_chunk(it),
             file_filter=file_filter,
@@ -74,7 +74,9 @@ class Patch(object):
     def parse_patch(patch, get_hunks=False, file_filter=None,
                     skip_comments=True, add_lines_for_new=True):
         if isinstance(patch, six.string_types):
-            patch = patch.split('\n')
+            patch = bytes(patch, 'utf-8')
+
+        patch = patch.split(b'\n')
 
         def gen(x):
             yield x
@@ -91,7 +93,7 @@ class Patch(object):
     @staticmethod
     def parse_file(filename, get_hunks=False, file_filter=None,
                    skip_comments=True, add_lines_for_new=True):
-        with open(filename, 'r') as In:
+        with open(filename, 'rb') as In:
             patch = In.read()
             return Patch.parse_patch(patch,
                                      get_hunks=get_hunks,
@@ -186,13 +188,13 @@ class Patch(object):
                 break
 
     def is_binary(self):
-        return self.line() == 'GIT binary patch'
+        return self.line() == b'GIT binary patch'
 
     def skip_deleted_file(self):
         self.skip_useless()
         if self.is_binary():
             self.skip_binary()
-        elif self.line().startswith('@'):
+        elif self.line().startswith(b'@'):
             minus, _ = self.parse_numbers()
             self.move(minus[1])
 
@@ -201,7 +203,7 @@ class Patch(object):
         self.skip_useless()
         if self.is_binary():
             self.skip_binary()
-        elif self.line().startswith('@'):
+        elif self.line().startswith(b'@'):
             _, plus = self.parse_numbers()
             self.move(plus[1])
         if self.filename:
@@ -211,7 +213,7 @@ class Patch(object):
                 self.deleted = []
 
     def next_diff(self):
-        self._condition(lambda x: not x.startswith('diff --git a/') and not x.startswith('diff -r '))
+        self._condition(lambda x: not x.startswith(b'diff --git a/') and not x.startswith(b'diff -r '))
         for line in self.get_lines:
             if line is None:
                 return True
@@ -219,13 +221,14 @@ class Patch(object):
 
     def get_files(self):
         line = self.line()
-        toks = line.split(' ')
+        toks = line.split(b' ')
         old_p = toks[2]
-        old_p = old_p[2:] if old_p.startswith('a/') else old_p
+        old_p = old_p[2:] if old_p.startswith(b'a/') else old_p
         new_p = toks[3]
-        new_p = new_p[2:] if new_p.startswith('b/') else new_p
+        new_p = new_p[2:] if new_p.startswith(b'b/') else new_p
         self.added = []
         self.deleted = []
+        new_p = new_p.decode('utf-8')
         if self.filter_file(new_p):
             self.filename = new_p
             return True
@@ -236,11 +239,11 @@ class Patch(object):
     def skip_useless(self):
 
         def start_filt(x):
-            return x.startswith('---') or \
-                x.startswith('+++') or \
-                x.startswith('index ') or \
-                x.startswith('old mode') or \
-                x.startswith('new mode')
+            return x.startswith(b'---') or \
+                x.startswith(b'+++') or \
+                x.startswith(b'index ') or \
+                x.startswith(b'old mode') or \
+                x.startswith(b'new mode')
 
         self._condition(start_filt)
         for line in self.get_lines:
@@ -253,7 +256,7 @@ class Patch(object):
         return count
 
     def count_minus(self, count):
-        self._condition(lambda x: x.startswith('-'))
+        self._condition(lambda x: x.startswith(b'-'))
         for line in self.get_lines:
             if line is None:
                 break
@@ -275,13 +278,13 @@ class Patch(object):
             if line is None:
                 break
             first = line[0]
-            if first == ' ':
+            if first == ord(' '):
                 count += 1
-            elif first == '+':
+            elif first == ord('+'):
                 scount = self.get_signed_count(line, count)
                 self.added.append(scount)
                 count += 1
-            elif first == '-':
+            elif first == ord('-'):
                 # here we get the line number where the deleted lines
                 # should be in the new file
                 scount = self.get_signed_count(line, count)
@@ -289,7 +292,7 @@ class Patch(object):
                 self.count_minus(count + 1)
 
     def parse_hunks(self, line):
-        self._condition(lambda x: x.startswith('@'))
+        self._condition(lambda x: x.startswith(b'@'))
         for line in self.get_lines:
             if line is None:
                 break
@@ -300,10 +303,10 @@ class Patch(object):
         diff = []
 
         for h_line in self.get_lines:
-            if h_line.startswith('diff --git a/') or h_line.startswith('diff -r '):
+            if h_line.startswith(b'diff --git a/') or h_line.startswith(b'diff -r '):
                 self.index -= 1  # step back, we have moved into the next file
                 break
-            elif h_line.startswith('@') and h_line != line:
+            elif h_line.startswith(b'@') and h_line != line:
                 self.parse_files_hunks(line)  # recursively parse each hunk
             else:
                 if h_line != line:
@@ -319,7 +322,7 @@ class Patch(object):
                 'src_end': src_end,
                 'dest_start': dest_start,
                 'dest_end': dest_end,
-                'diff': '\n'.join(diff) + '\n'
+                'diff': b'\n'.join(diff),
             }
         )
 
@@ -352,18 +355,18 @@ class Patch(object):
 
     def get_changes(self):
         for line in self.get_lines:
-            if line.startswith('new file') and not self.get_hunks:
+            if line.startswith(b'new file') and not self.get_hunks:
                 self.skip_new_file()
                 break
-            elif line.startswith('deleted file') and not self.get_hunks:
+            elif line.startswith(b'deleted file') and not self.get_hunks:
                 self.skip_deleted_file()
                 break
-            elif line.startswith('diff --git a/') or line.startswith('diff -r '):
+            elif line.startswith(b'diff --git a/') or line.startswith(b'diff -r '):
                 return
             else:
                 self.skip_useless()
                 line = self.line()
-                if line.startswith('@'):
+                if line.startswith(b'@'):
                     if self.get_hunks:
                         self.parse_files_hunks(line)
                     else:
@@ -371,11 +374,11 @@ class Patch(object):
                 break
 
         if not self.get_hunks and (self.added or self.deleted):
-                added, deleted, touched = self.get_touched()
-                self.results[self.filename] = {'added': added,
-                                               'deleted': deleted,
-                                               'touched': touched,
-                                               'new': False}
+            added, deleted, touched = self.get_touched()
+            self.results[self.filename] = {'added': added,
+                                           'deleted': deleted,
+                                           'touched': touched,
+                                           'new': False}
 
     def parse(self):
         try:

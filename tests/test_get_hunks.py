@@ -20,7 +20,7 @@ class GetHunksTest(unittest.TestCase):
                 'src_end': 17,
                 'dest_start': 225,
                 'dest_end': 27,
-                'diff': """\
+                'diff': b"""\
  
    /**
     * Called by the view when a result is selected.
@@ -48,8 +48,7 @@ class GetHunksTest(unittest.TestCase):
  
    get focused() {
      return this.textbox.getAttribute("focused") == "true";
-   }
-"""
+   }"""
             },
             {
                 'filename': 'browser/components/urlbar/tests/browser/browser_UrlbarController_resultOpening.js',
@@ -57,7 +56,7 @@ class GetHunksTest(unittest.TestCase):
                 'src_end': 17,
                 'dest_start': 54,
                 'dest_end': 23,
-                'diff': """\
+                'diff': b"""\
    sandbox.stub(window, "switchToTabHavingURI").returns(true);
    sandbox.stub(window, "isTabEmpty").returns(false);
    sandbox.stub(window.gBrowser, "removeTab");
@@ -81,8 +80,7 @@ class GetHunksTest(unittest.TestCase):
    let args = window.switchToTabHavingURI.args[0];
  
    Assert.equal(args[0], url, "Should have passed the expected url");
-   Assert.ok(!args[1], "Should not attempt to open a new tab");
-"""
+   Assert.ok(!args[1], "Should not attempt to open a new tab");"""
             }
         ]
 
