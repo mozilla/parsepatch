@@ -12,6 +12,7 @@ import six
 NUMS_PAT = re.compile(r'^@@ -([0-9]+),?([0-9]+)? \+([0-9]+),?([0-9]+)? @@')
 FIRST = {' ', '+', '-'}
 EMPTY_PAT = re.compile(r'^[+-][ \t]*(?://.*)?(?:/\*[^\*]*[\*]+/)?[ \t]*$')
+NOTHING_PAT = re.compile(r'^[\r\n]*$')
 
 
 class Patch(object):
@@ -126,7 +127,10 @@ class Patch(object):
         for _ in gen:
             while self.index < self.N:
                 line = self.lines[self.index]
-                if self._check(line):
+                if NOTHING_PAT.match(line):
+                    self.index += 1
+                    continue
+                elif self._check(line):
                     n = (yield line)
                     if n is None:
                         n = 1
