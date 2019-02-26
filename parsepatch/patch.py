@@ -170,10 +170,6 @@ class Patch(object):
     def move(self, n=1):
         self.get_lines.send(n)
 
-    def first(self):
-        line = self.line()
-        return line[0] if line else ''
-
     def parse_numbers(self, line=None):
         if not line:
             line = self.line()
